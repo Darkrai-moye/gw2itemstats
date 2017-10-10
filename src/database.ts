@@ -49,7 +49,47 @@ function storeCache(itemType: string, rarity: string, itemLevel: string, value: 
   .do((v) => console.log(`written to cache ${rarity} ${itemType} of level ${itemLevel}`));
 }
 
-async function queryTemplate(itemType: string, rarity: string, itemLevel: string) {
+function addAttributes(originalItem: any, addMap: { [key: string]: number }): any {
+  return Object.keys(addMap).reduce((curValue, keyName) => {
+    return {
+      ...curValue,
+      [keyName]: (parseInt(curValue[keyName], 10) + addMap[keyName]).toString(),
+    };
+  }, originalItem);
+}
+
+// Fixes attributes for acended trinkets + back.
+// translation of
+// |<!-- Ascended or legendary trinkets and back items
+//   -->{{#vardefine:major attribute asc|{{#expr:{{#var:major attribute}}+32}}}}<!--
+//   -->{{#vardefine:minor attribute asc|{{#expr:{{#var:minor attribute}}+18}}}}<!--
+//   -->{{#vardefine:major quad attribute asc|{{#expr:{{#var:major quad attribute}}+25}}}}<!--
+//   -->{{#vardefine:minor quad attribute asc|{{#expr:{{#var:minor quad attribute}}+12}}}}<!--
+//   -->{{#vardefine:celestial nbr asc|{{#expr:{{#var:celestial nbr}}+13}}}}<!--
+//   -->{{#switch:{{#replace:{{lc:{{{1|}}}}}|'s|}}
+// Source: https://wiki.guildwars2.com/index.php?title=Template:prefix_attributes&action=edit
+function fixAcended(itemInfo: any) {
+  if ( (itemInfo.rarityStd !== 'ascended') ||
+       ((itemInfo.supertype !== 'back item') &&
+        (itemInfo.supertype !== 'trinket')) ) {
+    return itemInfo;
+  }
+
+  return addAttributes(itemInfo, {
+    majorAttribute: 32,
+    minorAttribute: 18,
+    majorQuadAttribute: 25,
+    minorQuadAttribute: 12,
+    celestialNbr: 13,
+  });
+}
+
+function queryTemplate(itemType: string, rarity: string, itemLevel: string) {
+  return queryTemplateCache(itemType, rarity, itemLevel)
+    .then((v) => fixAcended(v))
+}
+
+async function queryTemplateCache(itemType: string, rarity: string, itemLevel: string) {
   if ( undefined === CACHE ) {
     await initCache();
   }
@@ -63,6 +103,8 @@ async function queryTemplate(itemType: string, rarity: string, itemLevel: string
   .toPromise();
 }
 
+// https://wiki.guildwars2.com/wiki/Template:Item_stat_lookup
+// Used by: https://wiki.guildwars2.com/wiki/Template:Prefix_attributes
 function _queryTemplate(itemType, rarity, itemLevel): Observable<any> {
   const template = `
     {{item stat lookup|type=${itemType}|rarity=${rarity}|level=${itemLevel}}}
